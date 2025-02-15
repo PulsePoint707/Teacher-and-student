@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Portal</title>
+  <style>
+    body {
+      background: #fff0f0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #d63333;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    header button {
+      background: #fff;
+      color: #d63333;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section h3 {
+      border-bottom: 2px solid #d63333;
+      padding-bottom: 5px;
+      margin-bottom: 15px;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 10px;
+      display: block;
+    }
+    input[type="text"], select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background: #d63333;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 5px;
+    }
+    button:hover {
+      background: #b52a2a;
+    }
+    #questionFeedback {
+      color: green;
+      margin-top: 5px;
+      min-height: 1.5em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    ul {
+      list-style-type: disc;
+      margin-left: 20px;
+    }
+    .marks-input {
+      width: 60px;
+      padding: 5px;
+      font-size: 14px;
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Teacher Portal</h1>
+    <button onclick="logout()">Logout</button>
+  </header>
+  <div class="container">
+    <!-- Add New Question Section -->
+    <div class="section">
+      <h3>Add New Question</h3>
+      
+      <label for="questionText">Question Text</label>
+      <input 
+        type="text" 
+        id="questionText" 
+        placeholder="Enter Your Question....">
+      
+      <label for="questionType">Question Type</label>
+      <select id="questionType" name="questionType" title="Select question type">
+        <option value="Attention">Attention Question</option>
+        <option value="Conceptual">Conceptual Question</option>
+        <option value="Open Ended">Open Ended Question</option>
+      </select>
+      
+      <div>
+        <button id="sendQuestion">Send Question</button>
+        <button id="endQuestion">End Last Question</button>
+        <button id="clearScores">Clear Scores</button>
+        <button id="sendEmailReport">Send Email Report</button>
+      </div>
+      <p id="questionFeedback"></p>
+    </div>
+    
+    <!-- Current Active Question Section -->
+    <div class="section">
+      <h3>Current Active Question</h3>
+      <div id="activeQuestionDisplay">
+        <p>No active question.</p>
+      </div>
+    </div>
+    
+    <!-- Student Report Section -->
+    <div class="section">
+      <h3>Student Report</h3>
+      <button id="refreshReport">Refresh Report</button>
+      <div>
+        <h4>Logged In Students</h4>
+        <div id="loggedInStudents"></div>
+      </div>
+      <div>
+        <h4>Student Answers &amp; Marks</h4>
+        <div id="studentAnswers"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    function logout(){
+      localStorage.removeItem("currentUser");
+      window.location.href = "login-portal.html";
+    }
+    
+    var currentUser = localStorage.getItem("currentUser");
+    if(currentUser !== "momerwahid@gmail.com"){
+      window.location.href = "login-portal.html";
+    }
+    
+    // Generate a unique ID for each question
+    function generateId() {
+      return 'q_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    // Load/save questions from localStorage
+    function loadQuestions() {
+      return JSON.parse(localStorage.getItem("questions") || "[]");
+    }
+    function saveQuestions(questions) {
+      localStorage.setItem("questions", JSON.stringify(questions));
+    }
+    
+    // Return the active question
+    function getActiveQuestion() {
+      var questions = loadQuestions();
+      return questions.find(q => q.active);
+    }
+    
+    // teacherMarks is an object: teacherMarks[studentEmail][questionId] = numericMark
+    function loadTeacherMarks() {
+      return JSON.parse(localStorage.getItem("teacherMarks") || "{}");
+    }
+    function saveTeacherMarks(marksObj) {
+      localStorage.setItem("teacherMarks", JSON.stringify(marksObj));
+    }
+    
+    // Display the active question in teacher portal
+    function displayActiveQuestion() {
+      var active = getActiveQuestion();
+      var displayDiv = document.getElementById("activeQuestionDisplay");
+      if(active) {
+        let html = "<p><strong>Type:</strong> " + active.type + "</p>";
+        if(active.type === "Attention") {
+          let re = /\*(.*?)\*/;
+          let match = active.text.match(re);
+          let expected = "";
+          let displayText = active.text;
+          if(match){
+            expected = match[1]; 
+            displayText = active.text.replace(re, " _____ ");
+          }
+          html += "<p><strong>Question:</strong> " + displayText + "</p>";
+          html += "<p><em>Expected Answer (inside stars):</em> " + expected + "</p>";
+        } else {
+          html += "<p><strong>Question:</strong> " + active.text + "</p>";
+        }
+        displayDiv.innerHTML = html;
+      } else {
+        displayDiv.innerHTML = "<p>No active question.</p>";
+      }
+    }
+    
+    // End the active question
+    function endActiveQuestion() {
+      let questions = loadQuestions();
+      let updated = false;
+      questions = questions.map(q => {
+        if(q.active){
+          q.active = false;
+          updated = true;
+        }
+        return q;
+      });
+      if(updated) saveQuestions(questions);
+      displayActiveQuestion();
+    }
+    
+    // Send a new question
+    document.getElementById("sendQuestion").addEventListener("click", function(){
+      let qText = document.getElementById("questionText").value.trim();
+      let qType = document.getElementById("questionType").value;
+      
+      // If it's "Attention," enforce the requirement for *...*
+      if(qType === "Attention") {
+        let starRegex = /\*.*?\*/;
+        if(!starRegex.test(qText)) {
+          document.getElementById("questionFeedback").innerText = 
+            "Error: For an Attention question, you must include *...* to mark the answer.";
+          return;
+        }
+      }
+      
+      if(qText === ""){
+        document.getElementById("questionFeedback").innerText = "Please enter question text.";
+        return;
+      }
+      
+      // End any existing question
+      endActiveQuestion();
+      
+      let questions = loadQuestions();
+      let newQuestion = {
+        id: generateId(),
+        type: qType,
+        text: qText,
+        active: true,
+        timestamp: Date.now()
+      };
+      questions.push(newQuestion);
+      saveQuestions(questions);
+      document.getElementById("questionFeedback").innerText = "Question sent successfully.";
+      document.getElementById("questionText").value = "";
+      displayActiveQuestion();
+    });
+    
+    // End last question
+    document.getElementById("endQuestion").addEventListener("click", function(){
+      endActiveQuestion();
+      document.getElementById("questionFeedback").innerText = "Active question ended.";
+    });
+    
+    // Clear Scores
+    document.getElementById("clearScores").addEventListener("click", function(){
+      if(confirm("This will clear all questions and answers/marks. Are you sure?")){
+        localStorage.removeItem("questions");
+        localStorage.removeItem("answers");
+        localStorage.removeItem("teacherMarks");
+        document.getElementById("questionFeedback").innerText = "All cleared.";
+        displayActiveQuestion();
+        refreshReport();
+      }
+    });
+    
+    // Refresh the student report
+    function refreshReport() {
+      // Show logged in students
+      let students = JSON.parse(localStorage.getItem("loggedInStudents") || "[]");
+      let studentDiv = document.getElementById("loggedInStudents");
+      if(students.length === 0){
+        studentDiv.innerHTML = "<p>No students have logged in.</p>";
+      } else {
+        let ul = "<ul>";
+        students.forEach(s => {
+          ul += "<li>" + s + "</li>";
+        });
+        ul += "</ul>";
+        studentDiv.innerHTML = ul;
+      }
+      
+      // Show student answers & teacher mark inputs
+      let answers = JSON.parse(localStorage.getItem("answers") || "{}");
+      let teacherMarks = loadTeacherMarks();
+      
+      let questions = loadQuestions();
+      let qLookup = {};
+      questions.forEach(q => {
+        qLookup[q.id] = q;
+      });
+      
+      let answersDiv = document.getElementById("studentAnswers");
+      if(Object.keys(answers).length === 0) {
+        answersDiv.innerHTML = "<p>No answers submitted yet.</p>";
+      } else {
+        let html = "";
+        for(let student in answers) {
+          html += "<h4>" + student + "</h4>";
+          html += "<table><tr><th>Question ID</th><th>Answer</th><th>Marks</th><th>Action</th></tr>";
+          for(let qid in answers[student]){
+            let ans = answers[student][qid];
+            
+            // The teacher can type a numeric mark
+            let existingMark = 0;
+            if(teacherMarks[student] && teacherMarks[student][qid]){
+              existingMark = teacherMarks[student][qid];
+            }
+            
+            html += "<tr>";
+            html += "<td>" + qid + "</td>";
+            html += "<td>" + ans + "</td>";
+            // Marks input
+            html += `<td><input type="number" class="marks-input" 
+                               id="mark_${student}_${qid}" 
+                               value="${existingMark}"></td>`;
+            // Update button
+            html += `<td><button onclick="updateMarks('${student}','${qid}')">Update</button></td>`;
+            html += "</tr>";
+          }
+          html += "</table>";
+        }
+        answersDiv.innerHTML = html;
+      }
+    }
+    
+    // Called when teacher clicks "Update" next to a student's answer
+    function updateMarks(studentEmail, questionId){
+      let markInput = document.getElementById(`mark_${studentEmail}_${questionId}`);
+      if(!markInput) return;
+      
+      let newMark = parseFloat(markInput.value) || 0; // default 0 if invalid
+      let teacherMarks = loadTeacherMarks();
+      
+      if(!teacherMarks[studentEmail]){
+        teacherMarks[studentEmail] = {};
+      }
+      teacherMarks[studentEmail][questionId] = newMark;
+      saveTeacherMarks(teacherMarks);
+      
+      document.getElementById("questionFeedback").innerText = 
+        `Marks updated for ${studentEmail}, QID: ${questionId}.`;
+    }
+    
+    document.getElementById("refreshReport").addEventListener("click", refreshReport);
+    
+    // Send Email Report
+    document.getElementById("sendEmailReport").addEventListener("click", function(){
+      let students = JSON.parse(localStorage.getItem("loggedInStudents") || "[]");
+      let answers = JSON.parse(localStorage.getItem("answers") || "{}");
+      let teacherMarks = loadTeacherMarks();
+      let report = "Logged In Students:\n";
+      
+      if(students.length === 0){
+        report += "None\n";
+      } else {
+        report += students.join(", ") + "\n";
+      }
+      report += "\nStudent Answers and Marks:\n";
+      
+      let questions = loadQuestions();
+      let qLookup = {};
+      questions.forEach(q => {
+        qLookup[q.id] = q;
+      });
+      
+      for(let student in answers) {
+        report += "Student: " + student + "\n";
+        for(let qid in answers[student]){
+          let ans = answers[student][qid];
+          let assignedMark = 0;
+          if(teacherMarks[student] && teacherMarks[student][qid]){
+            assignedMark = teacherMarks[student][qid];
+          }
+          report += `Question ID: ${qid} | Answer: ${ans} | Mark: ${assignedMark}\n`;
+        }
+        report += "\n";
+      }
+      
+      let mailtoLink = "mailto:momerwahid@gmail.com?subject=Student Report&body=" + encodeURIComponent(report);
+      document.getElementById("questionFeedback").innerText = "Email link opened.";
+      window.location.href = mailtoLink;
+    });
+    
+    // Poll every 2s to update the active question
+    setInterval(displayActiveQuestion, 2000);
+    // On load
+    displayActiveQuestion();
+    refreshReport();
+  </script>
+</body>
+</html>

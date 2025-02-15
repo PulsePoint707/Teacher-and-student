@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Portal</title>
+  <style>
+    body {
+      background: #e6f7ff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #2575fc;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    header button {
+      background: #fff;
+      color: #2575fc;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .question {
+      margin-bottom: 15px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .question strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    input.answer-input {
+      width: 60%;
+      padding: 8px;
+      font-size: 16px;
+      margin: 5px 0;
+    }
+    textarea {
+      width: 100%;
+      height: 80px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+    }
+    button.submit-btn {
+      background: #2575fc;
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+    button.submit-btn:hover {
+      background: #1a5bb8;
+    }
+    #message {
+      text-align: center;
+      color: green;
+      margin-top: 10px;
+      min-height: 1.2em;
+    }
+    /* Scores section */
+    #scoresSection {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    #scoresSection h3 {
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Student Portal</h1>
+    <button onclick="logout()">Logout</button>
+  </header>
+  <div class="container">
+    <div id="questionContainer"></div>
+    <button class="submit-btn" id="submitAnswer">Submit Answer</button>
+    <p id="message"></p>
+    
+    <!-- Student's Own Scores -->
+    <div id="scoresSection">
+      <h3>My Scores</h3>
+      <p><strong>Total Marks:</strong> <span id="myTotalMarks">0</span></p>
+      <p><strong>Total Answered:</strong> <span id="myAnswered">0</span></p>
+      <p><strong>Percentage:</strong> <span id="myPercentage">0%</span></p>
+    </div>
+  </div>
+  
+  <script>
+    function logout(){
+      localStorage.removeItem("currentUser");
+      window.location.href = "login-portal.html";
+    }
+    
+    var currentUser = localStorage.getItem("currentUser");
+    if(!currentUser) {
+      window.location.href = "login-portal.html";
+    }
+    
+    // We store typed text in this object so re-render won't erase it.
+    // keyed by questionId -> typed text
+    var typedAnswersCache = {};
+    
+    // Renders the active question. If there's no active question, hides the Submit button.
+    function renderQuestion() {
+      var questions = JSON.parse(localStorage.getItem("questions") || "[]");
+      var activeQuestion = questions.find(q => q.active);
+      var container = document.getElementById("questionContainer");
+      var submitBtn = document.getElementById("submitAnswer");
+      
+      if(!activeQuestion) {
+        container.innerHTML = "<p>No active question available at the moment.</p>";
+        submitBtn.style.display = "none";
+        return;
+      }
+      
+      submitBtn.style.display = "block";
+      
+      // Build HTML for the question
+      var html = "<div class='question'><strong>Type:</strong> " + activeQuestion.type + "<br>";
+      
+      if(activeQuestion.type === "Attention") {
+        // Must have asterisks in text
+        var re = /\*(.*?)\*/;
+        var match = activeQuestion.text.match(re);
+        if(match){
+          var replaced = activeQuestion.text.replace(re, 
+            `<input class='answer-input' type='text' id='answer_${activeQuestion.id}' placeholder='Your answer...'>`
+          );
+          html += "<strong>Question:</strong> " + replaced;
+        } else {
+          // fallback if no asterisks found
+          html += "<strong>Question:</strong> " + activeQuestion.text + "<br>" +
+                  `<input class='answer-input' type='text' id='answer_${activeQuestion.id}' placeholder='Your answer...'>`;
+        }
+      } else {
+        // Conceptual or Open Ended
+        html += "<strong>Question:</strong> " + activeQuestion.text + "<br>" +
+                `<textarea id='answer_${activeQuestion.id}' placeholder='Your answer here...'></textarea>`;
+      }
+      
+      html += "</div>";
+      container.innerHTML = html;
+      
+      // Restore typed text if any
+      var answerEl = document.getElementById("answer_" + activeQuestion.id);
+      if(answerEl) {
+        if(typedAnswersCache[activeQuestion.id]) {
+          answerEl.value = typedAnswersCache[activeQuestion.id];
+        }
+        // Whenever the user types, update the cache
+        answerEl.addEventListener("input", function(){
+          typedAnswersCache[activeQuestion.id] = this.value;
+        });
+      }
+    }
+    
+    // Student clicks "Submit Answer"
+    document.getElementById("submitAnswer").addEventListener("click", function(){
+      var questions = JSON.parse(localStorage.getItem("questions") || "[]");
+      var activeQuestion = questions.find(q => q.active);
+      if(!activeQuestion){
+        document.getElementById("message").innerText = "No active question to answer.";
+        return;
+      }
+      
+      var answerEl = document.getElementById("answer_" + activeQuestion.id);
+      if(!answerEl) {
+        document.getElementById("message").innerText = "Could not find an input for this question.";
+        return;
+      }
+      var answer = answerEl.value.trim();
+      if(answer === ""){
+        document.getElementById("message").innerText = "Please provide an answer.";
+        return;
+      }
+      
+      // Save the answer in localStorage
+      var allAnswers = JSON.parse(localStorage.getItem("answers") || "{}");
+      if(!allAnswers[currentUser]){
+        allAnswers[currentUser] = {};
+      }
+      allAnswers[currentUser][activeQuestion.id] = answer;
+      localStorage.setItem("answers", JSON.stringify(allAnswers));
+      
+      document.getElementById("message").innerText = "Answer submitted successfully!";
+      
+      // Clear the typedAnswersCache for this question, so the user sees a fresh field
+      typedAnswersCache[activeQuestion.id] = answer;
+      
+      // Update student's own marks
+      updateMyScores();
+    });
+    
+    // Compute total teacher-assigned marks for this student
+    function updateMyScores() {
+      // "teacherMarks" is an object of objects: teacherMarks[studentEmail][questionId] = numericMark
+      var teacherMarks = JSON.parse(localStorage.getItem("teacherMarks") || "{}");
+      var myMarksObj = teacherMarks[currentUser] || {};
+      
+      // total marks is sum of all numeric marks
+      var totalMarks = 0;
+      var answeredCount = 0;
+      for(var qid in myMarksObj){
+        var mark = parseFloat(myMarksObj[qid]) || 0;
+        totalMarks += mark;
+        answeredCount++;
+      }
+      // Show them
+      document.getElementById("myTotalMarks").innerText = totalMarks;
+      document.getElementById("myAnswered").innerText = answeredCount;
+      
+      var percentage = 0;
+      if(answeredCount > 0){
+        // e.g. each question might be out of 1 or out of 10, but we'll assume the teacher is consistent
+        // We'll just do "marks / answeredCount * 100" as a naive percentage
+        percentage = (totalMarks / answeredCount) * 100;
+      }
+      document.getElementById("myPercentage").innerText = percentage.toFixed(1) + "%";
+    }
+    
+    // Poll every 2 seconds so changes from teacher side (like ending question) appear
+    setInterval(renderQuestion, 2000);
+    setInterval(updateMyScores, 2000);
+    
+    // Initial load
+    renderQuestion();
+    updateMyScores();
+  </script>
+</body>
+</html>
